@@ -1,4 +1,9 @@
 {
     "username": "",
-    "password": ""
+    "password": "",
+
+    "SMTPHost": "",
+    "SMTPPort": 587,
+    "SMTPUsername": "",
+    "SMTPPassword": ""
 }
