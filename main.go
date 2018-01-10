@@ -35,6 +35,7 @@ type Semester struct {
 
 type Module struct {
 	Name     string
+	Url      string
 	Attempts []Attempt
 }
 
@@ -117,16 +118,45 @@ func (dualis *Dualis) getResultPageList(homeUrl *url.URL) {
 	htmlNavElement, _ := scrape.Find(root, navElementMatcher)
 	htmlNavLink, _ := scrape.Find(htmlNavElement, scrape.ByTag(atom.A))
 
-	req, _ = http.NewRequest("GET", baseURL+scrape.Attr(htmlNavLink, "href"), nil)
-	req.Header.Add("User-Agent", userAgent)
-	resp, _ = dualis.Client.Do(req)
+	dualis.discoverSemesters(scrape.Attr(htmlNavLink, "href"))
 
-	root, _ = html.Parse(resp.Body)
-	dualis.discoverSemesters(root)
-	fmt.Println(dualis.Semester)
+	for i, semester := range dualis.Semester {
+		dualis.discoverModules(&semester)
+		dualis.Semester[i] = semester
+	}
+
+	dualis.parseModule(&dualis.Semester[2].Modules[0])
 }
 
-func (dualis *Dualis) discoverSemesters(root *html.Node) {
+func (dualis *Dualis) discoverModules(semester *Semester) {
+	req, _ := http.NewRequest("GET", baseURL+semester.Url, nil)
+	req.Header.Add("User-Agent", userAgent)
+	resp, _ := dualis.Client.Do(req)
+
+	root, _ := html.Parse(resp.Body)
+
+	htmlModuleTable, _ := scrape.Find(root, scrape.ByClass("nb"))
+
+	htmlModuleLinks := scrape.FindAll(htmlModuleTable, scrape.ByTag(atom.A))
+
+	for _, htmlModuleLink := range htmlModuleLinks {
+		module := Module{
+			Url: scrape.Attr(htmlModuleLink, "href"),
+		}
+
+		semester.Modules = append(semester.Modules, module)
+	}
+
+	log.Printf("Discovered %v new modules in semester: %s", len(semester.Modules), semester.Name)
+}
+
+func (dualis *Dualis) discoverSemesters(url string) {
+	req, _ := http.NewRequest("GET", baseURL+url, nil)
+	req.Header.Add("User-Agent", userAgent)
+	resp, _ := dualis.Client.Do(req)
+
+	root, _ := html.Parse(resp.Body)
+
 	semesterMatcher := func(n *html.Node) bool {
 		return n.DataAtom == atom.Option
 	}
@@ -155,7 +185,7 @@ func (dualis *Dualis) buildSemesterUrl(dirt string) (url string) {
 		params = append(params, match[1])
 	}
 
-	url = params[0] + "?APPNAME=" + params[1] + "&PRGNAME=" + params[2] + "&ARGUMENTS=-N" + params[3] + ",-N" + params[4] + params[5]
+	url = params[0] + "?APPNAME=" + params[1] + "&PRGNAME=" + params[2] + "&ARGUMENTS=-N" + params[3] + ",-N" + params[4] + "," + params[5]
 
 	return url
 }
@@ -251,9 +281,9 @@ func (dualis *Dualis) cleanRefreshURL(dirt string) (cleanURL *url.URL, ok bool) 
 	return cleanURL, true
 }
 
-func (dualis *Dualis) parseModule(url string) (module Module, ok bool) {
-	// file, _ := ioutil.ReadFile("cache/double_exam.html")
-	// data := bytes.NewReader(file)
+func (dualis *Dualis) parseModule(module *Module) (ok bool) {
+	url := module.Url
+
 	req, _ := http.NewRequest("GET", baseURL+url, nil)
 	req.Header.Add("User-Agent", userAgent)
 	resp, _ := dualis.Client.Do(req)
@@ -276,9 +306,11 @@ func (dualis *Dualis) parseModule(url string) (module Module, ok bool) {
 
 	htmlModuleName, _ := scrape.Find(root, moduleNameMatcher)
 
-	module = Module{
-		Name: strings.Replace(scrape.Text(htmlModuleName), "\n", "", -1),
-	}
+	// module = Module{
+	// 	Name: strings.Replace(scrape.Text(htmlModuleName), "\n", "", -1),
+	// 	Url:  url,
+	// }
+	module.Name = strings.Replace(scrape.Text(htmlModuleName), "\n", "", -1)
 
 	log.Println("===============================================================")
 	log.Println("MODULE: ", module.Name)
@@ -348,5 +380,5 @@ ProcessRows:
 	}
 	processingEvent = false
 
-	return module, false
+	return true
 }
