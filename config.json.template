@@ -5,5 +5,7 @@
     "SMTPHost": "",
     "SMTPPort": 587,
     "SMTPUsername": "",
-    "SMTPPassword": ""
+    "SMTPPassword": "",
+
+    "notificationRecipient": ""
 }
