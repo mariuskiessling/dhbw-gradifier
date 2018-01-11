@@ -7,5 +7,7 @@
     "SMTPUsername": "",
     "SMTPPassword": "",
 
-    "notificationRecipient": ""
+    "notificationRecipient": "",
+
+    "updateIntervalMinutes": 25
 }

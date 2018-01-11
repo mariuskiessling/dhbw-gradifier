@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -34,6 +35,7 @@ type Config struct {
 	SMTPUsername          string
 	SMTPPassword          string
 	NotificationRecipient string
+	UpdateIntervalMinutes int
 }
 
 type Semester struct {
@@ -93,26 +95,22 @@ func main() {
 	homeUrl, _ := dualis.login(config.Username, config.Password)
 	dualis.initStructs(homeUrl)
 
-	go dualis.startGradePolling(config)
-
-	for {
-	}
-}
-
-func (dualis *Dualis) startGradePolling(config *Config) {
-	log.Println("Grade polling started.")
-
-	for {
-		<-time.After(1 * time.Minute)
-		go dualis.pollGrades(config)
-	}
+	dualis.pollGrades(config)
 }
 
 func (dualis *Dualis) pollGrades(config *Config) {
-	log.Println("Polling for new grades.")
+	log.Printf("Scheduled polling for grades (Every %v minute(s)).\n", config.UpdateIntervalMinutes)
 
-	updatedModules := dualis.updateModules()
-	dualis.sendNotification(&updatedModules, config)
+	for {
+		time.Sleep(time.Duration(config.UpdateIntervalMinutes) * time.Minute)
+		log.Println("Polling for new grades.")
+		updatedModules := dualis.updateModules()
+
+		if len(updatedModules) > 0 {
+			log.Println("No new grades discovered.")
+			dualis.sendNotification(&updatedModules, config)
+		}
+	}
 }
 
 func (dualis *Dualis) sendNotification(modules *[]Module, config *Config) {
@@ -146,18 +144,18 @@ func (dualis *Dualis) sendNotification(modules *[]Module, config *Config) {
 func (dualis *Dualis) updateModules() (updatedModules []Module) {
 	for i, _ := range dualis.Semester {
 		for j, _ := range dualis.Semester[i].Modules {
-			diffModule := dualis.Semester[i].Modules[j]
+			var diffModule Module
+			diffModule = dualis.Semester[i].Modules[j]
 
-			dualis.parseModule(&dualis.Semester[i].Modules[j])
+			newModule, _ := dualis.parseModule(&dualis.Semester[i].Modules[j])
+			dualis.Semester[i].Modules[j] = *newModule
 
-			if !cmp.Equal(diffModule, dualis.Semester[i].Modules[j]) {
+			if !reflect.DeepEqual(diffModule, dualis.Semester[i].Modules[j]) {
 				updatedModules = append(updatedModules, dualis.Semester[i].Modules[j])
 				log.Println("Found update for module:", dualis.Semester[i].Modules[j].Name)
 			}
 		}
 	}
-
-	log.Println(updatedModules)
 
 	return updatedModules
 }
@@ -356,7 +354,7 @@ func (dualis *Dualis) cleanRefreshURL(dirt string) (cleanURL *url.URL, ok bool) 
 	return cleanURL, true
 }
 
-func (dualis *Dualis) parseModule(module *Module) (ok bool) {
+func (dualis *Dualis) parseModule(module *Module) (mod *Module, ok bool) {
 	url := module.Url
 
 	req, _ := http.NewRequest("GET", baseURL+url, nil)
@@ -381,11 +379,10 @@ func (dualis *Dualis) parseModule(module *Module) (ok bool) {
 
 	htmlModuleName, _ := scrape.Find(root, moduleNameMatcher)
 
-	// module = Module{
-	// 	Name: strings.Replace(scrape.Text(htmlModuleName), "\n", "", -1),
-	// 	Url:  url,
-	// }
 	module.Name = strings.Replace(scrape.Text(htmlModuleName), "\n", "", -1)
+
+	// Reset module
+	module.Attempts = []Attempt{}
 
 	log.Println("===============================================================")
 	log.Println("MODULE: ", module.Name)
@@ -455,5 +452,5 @@ ProcessRows:
 	}
 	processingEvent = false
 
-	return true
+	return module, true
 }
