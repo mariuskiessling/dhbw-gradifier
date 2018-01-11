@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -10,11 +12,13 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/yhat/scrape"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
+	gomail "gopkg.in/gomail.v2"
 )
 
 type Dualis struct {
@@ -23,8 +27,13 @@ type Dualis struct {
 }
 
 type Config struct {
-	Username string
-	Password string
+	Username              string
+	Password              string
+	SMTPHost              string
+	SMTPPort              int
+	SMTPUsername          string
+	SMTPPassword          string
+	NotificationRecipient string
 }
 
 type Semester struct {
@@ -74,6 +83,7 @@ func main() {
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return nil
 		},
+		Timeout: time.Duration(10 * time.Second),
 	}
 
 	dualis := Dualis{
@@ -81,8 +91,75 @@ func main() {
 	}
 
 	homeUrl, _ := dualis.login(config.Username, config.Password)
-	dualis.getResultPageList(homeUrl)
+	dualis.initStructs(homeUrl)
 
+	go dualis.startGradePolling(config)
+
+	for {
+	}
+}
+
+func (dualis *Dualis) startGradePolling(config *Config) {
+	log.Println("Grade polling started.")
+
+	for {
+		<-time.After(1 * time.Minute)
+		go dualis.pollGrades(config)
+	}
+}
+
+func (dualis *Dualis) pollGrades(config *Config) {
+	log.Println("Polling for new grades.")
+
+	updatedModules := dualis.updateModules()
+	dualis.sendNotification(&updatedModules, config)
+}
+
+func (dualis *Dualis) sendNotification(modules *[]Module, config *Config) {
+	log.Printf("Sending notification for %v modules.\n", len(*modules))
+
+	tpl, err := template.ParseFiles("notification.tpl")
+	if err != nil {
+		panic(err)
+	}
+
+	var body bytes.Buffer
+
+	err = tpl.Execute(&body, modules)
+	if err != nil {
+		panic(err)
+	}
+
+	m := gomail.NewMessage()
+	m.SetHeader("From", config.SMTPUsername)
+	m.SetHeader("To", config.NotificationRecipient)
+	m.SetHeader("Subject", "New grades available!")
+	m.SetBody("text/html", body.String())
+
+	d := gomail.NewDialer(config.SMTPHost, config.SMTPPort, config.SMTPUsername, config.SMTPPassword)
+
+	if err := d.DialAndSend(m); err != nil {
+		panic(err)
+	}
+}
+
+func (dualis *Dualis) updateModules() (updatedModules []Module) {
+	for i, _ := range dualis.Semester {
+		for j, _ := range dualis.Semester[i].Modules {
+			diffModule := dualis.Semester[i].Modules[j]
+
+			dualis.parseModule(&dualis.Semester[i].Modules[j])
+
+			if !cmp.Equal(diffModule, dualis.Semester[i].Modules[j]) {
+				updatedModules = append(updatedModules, dualis.Semester[i].Modules[j])
+				log.Println("Found update for module:", dualis.Semester[i].Modules[j].Name)
+			}
+		}
+	}
+
+	log.Println(updatedModules)
+
+	return updatedModules
 }
 
 func parseConfig(filename string) (cfg *Config, ok bool) {
@@ -105,7 +182,7 @@ func parseConfig(filename string) (cfg *Config, ok bool) {
 	return &config, true
 }
 
-func (dualis *Dualis) getResultPageList(homeUrl *url.URL) {
+func (dualis *Dualis) initStructs(homeUrl *url.URL) {
 	req, _ := http.NewRequest("GET", baseURL+homeUrl.String(), nil)
 	req.Header.Add("User-Agent", userAgent)
 	resp, _ := dualis.Client.Do(req)
@@ -124,8 +201,6 @@ func (dualis *Dualis) getResultPageList(homeUrl *url.URL) {
 		dualis.discoverModules(&semester)
 		dualis.Semester[i] = semester
 	}
-
-	dualis.parseModule(&dualis.Semester[2].Modules[0])
 }
 
 func (dualis *Dualis) discoverModules(semester *Semester) {
