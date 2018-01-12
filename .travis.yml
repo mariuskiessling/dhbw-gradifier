@@ -5,7 +5,6 @@ env:
   - "PATH=/home/travis/gopath/bin:$PATH"
 before_install:
   - go get github.com/mitchellh/gox
-  - gox -build-toolchain
   - go get github.com/google/go-cmp/cmp
   - go get github.com/yhat/scrape
   - go get golang.org/x/net/html
