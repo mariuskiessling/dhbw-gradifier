@@ -5,6 +5,7 @@ env:
   - "PATH=/home/travis/gopath/bin:$PATH"
 before_install:
   - go get github.com/mitchellh/gox
+  - go get github.com/tcnksm/ghr
   - go get github.com/google/go-cmp/cmp
   - go get github.com/yhat/scrape
   - go get golang.org/x/net/html
@@ -12,3 +13,6 @@ before_install:
   - go get gopkg.in/gomail.v2
 after_success:
   - gox -output "build/{{.OS}}_{{.Arch}}_{{.Dir}}"
+  - mv config.json.template build/config.json
+  - mv notification.tpl build/notification.tpl
+  - ghr -u mariuskiessling -r dhbw-gradifier -t $GITHUB_TOKEN -delete -b "Download the binary for your platform, the config.json and notification.tpl and place them inside the same directory. Make sure to enter all config values before the first execution." latest build/
