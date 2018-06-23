@@ -264,19 +264,6 @@ func (dualis *Dualis) buildSemesterUrl(dirt string) (url string) {
 }
 
 func (dualis *Dualis) login(username, password string) (homeUrl *url.URL, ok bool) {
-	resp, _ := dualis.Client.Get(baseURL + loginPath)
-	defer resp.Body.Close()
-
-	_, ok = dualis.sessionCookie(resp)
-	if !ok {
-		log.Fatal("No session cookie configured.")
-		var u *url.URL
-		return u, false
-	}
-
-	u, _ := url.Parse("https://dualis.dhbw.de")
-	dualis.Client.Jar.SetCookies(u, resp.Cookies())
-
 	postData := url.Values{"usrname": {username},
 		"pass":      {password},
 		"APPNAME":   {"CampusNet"},
@@ -292,7 +279,7 @@ func (dualis *Dualis) login(username, password string) (homeUrl *url.URL, ok boo
 	req, _ := http.NewRequest("POST", baseURL+loginScriptPath, strings.NewReader(postData.Encode()))
 	req.Header.Add("User-Agent", userAgent)
 
-	resp, _ = dualis.Client.Do(req)
+	resp, _ := dualis.Client.Do(req)
 
 	if len(resp.Header.Get("REFRESH")) == 0 {
 		log.Fatalln("Could not log in. Check credentials.")
@@ -302,6 +289,15 @@ func (dualis *Dualis) login(username, password string) (homeUrl *url.URL, ok boo
 		log.Println("Login successful. Following 1st startup redirect.")
 	}
 
+	_, ok = dualis.sessionCookie(resp)
+	if !ok {
+		log.Fatal("No session cookie configured.")
+		var u *url.URL
+		return u, false
+	}
+
+	u, _ := url.Parse("https://dualis.dhbw.de")
+	dualis.Client.Jar.SetCookies(u, resp.Cookies())
 	refreshUrl, _ := dualis.cleanRefreshURL(resp.Header.Get("REFRESH"))
 	req, _ = http.NewRequest("GET", baseURL+refreshUrl.String(), nil)
 	req.Header.Add("User-Agent", userAgent)
