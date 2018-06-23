@@ -16,3 +16,7 @@ after_success:
   - mv config.json.template build/config.json
   - mv notification.tpl build/notification.tpl
   - ghr -u mariuskiessling -r dhbw-gradifier -t $GITHUB_TOKEN -delete -b "Download the binary for your platform, the config.json and notification.tpl and place them inside the same directory. Make sure to enter all config values before the first execution." latest build/
+
+branches:
+  only:
+  - master
