@@ -401,7 +401,7 @@ ProcessRows:
 			module.Attempts = append(module.Attempts, attempt)
 
 		case "level02":
-			if processingEvent && len(htmlColumns) > 1 {
+			if processingEvent && len(htmlColumns) > 1 && scrape.Attr(htmlColumns[1], "class") != "level02 level02_chkbox_workaround_mpa" {
 				log.Printf("└ Event result: %s\n", scrape.Text(htmlColumns[3]))
 
 				processingEvent = false
