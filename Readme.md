@@ -1,7 +1,7 @@
 # DHBW Gradifier
 ![alt text](https://api.travis-ci.org/mariuskiessling/dhbw-gradifier.svg?branch=latest "Build status badge")
 
-This simple Go tool fetches all published grades from Dualis and sends you an email when new grades get published. If you don't know what Dualis is you can definitely call yourself happy. Dualis is the grade management system that is used at the DHBW Stuttgart. This project is one reason never to touch the web interface ever again.
+This simple Go tool fetches all published grades from Dualis and sends you an email when new grades get published. If you don't know what Dualis is you can definitely call yourself happy. Dualis is the grade management system that is used at the DHBW Stuttgart. This project is one reason never to touch the web interface again.
 
 **Please note**: This is my first attempt at writing Go code. Therefore please take the code with a grain of salt.
 
